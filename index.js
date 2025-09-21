@@ -1,13 +1,19 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const multer = require("multer");
 
 const app = express();
+// Serve static files from "uploads" folder
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+
 
 // MongoDB connection
 const client = new MongoClient(process.env.MONGODB_URI, {
@@ -19,6 +25,7 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 });
 
 let adminsCollection;
+let logoCollection;
 
 async function run() {
   try {
@@ -27,6 +34,7 @@ async function run() {
     // Database & Collection
     const db = client.db("viks"); // database name
     adminsCollection = db.collection("admin-collection"); // collection name
+    logoCollection = db.collection("logo");
 
     console.log("✅ MongoDB Connected Successfully!");
   } catch (error) {
@@ -34,6 +42,20 @@ async function run() {
   }
 }
 run();
+
+// ==== Multer Storage ====
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/"); // লোকাল uploads ফোল্ডারে save হবে
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname)); // unique নাম
+  },
+});
+const upload = multer({ storage });
+
+// ==== Serve static files ====
+app.use("/uploads", express.static("uploads"));
 
 // ================= ROUTES =================
 
@@ -243,6 +265,40 @@ app.patch("/api/admins/:id/ban", async (req, res) => {
   }
 });
 
+// Get logo
+app.get("/api/logo", async (req, res) => {
+  const logo = await logoCollection.findOne({});
+  res.json(logo || {});
+});
+
+app.post("/api/logo", upload.single("logo"), async (req, res) => {
+  try {
+    if (!req.file) {
+      console.log("❌ No file received");
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    console.log("✅ File received:", req.file);
+
+    const logoUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+    console.log("✅ Generated logoUrl:", logoUrl);
+
+    const existing = await logoCollection.findOne({});
+    if (existing) {
+      await logoCollection.updateOne(
+        { _id: existing._id },
+        { $set: { logoUrl } }
+      );
+    } else {
+      await logoCollection.insertOne({ logoUrl });
+    }
+
+    res.json({ logoUrl });
+  } catch (err) {
+    console.error("❌ Upload error:", err);   // 👈 এখানে আসল error দেখাবে
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 // ================= START SERVER =================
