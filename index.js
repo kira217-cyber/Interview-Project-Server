@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const fs = require("fs");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const multer = require("multer");
 
@@ -26,6 +27,8 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 
 let adminsCollection;
 let logoCollection;
+let sliderCollection;
+let settingsCollection;
 
 async function run() {
   try {
@@ -35,6 +38,8 @@ async function run() {
     const db = client.db("viks"); // database name
     adminsCollection = db.collection("admin-collection"); // collection name
     logoCollection = db.collection("logo");
+    sliderCollection = db.collection("sliders");
+    settingsCollection = db.collection("settings");
 
     console.log("✅ MongoDB Connected Successfully!");
   } catch (error) {
@@ -56,6 +61,19 @@ const upload = multer({ storage });
 
 // ==== Serve static files ====
 app.use("/uploads", express.static("uploads"));
+
+
+// ==== Multer Config for Sliders ====
+const sliderStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/"); 
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  },
+});
+const uploadSlider = multer({ storage: sliderStorage });
+
 
 // ================= ROUTES =================
 
@@ -299,6 +317,152 @@ app.post("/api/logo", upload.single("logo"), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// =======================
+// =======================
+// Delete logo
+app.delete("/api/logo/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const logo = await logoCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!logo) {
+      return res.status(404).json({ message: "Logo not found" });
+    }
+
+    // file delete (DB তে filename রাখতে হবে)
+    if (logo.filename) {
+      const filePath = path.join(__dirname, "uploads", logo.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    // mongo থেকে delete
+    await logoCollection.deleteOne({ _id: new ObjectId(id) });
+
+    res.json({ message: "Logo deleted successfully" });
+  } catch (error) {
+    console.error("❌ Delete error:", error);
+    res.status(500).json({ message: "Error deleting logo" });
+  }
+});
+
+
+// ================= SLIDER ROUTES =================
+
+// Get all sliders
+app.get("/api/sliders", async (req, res) => {
+  try {
+    const sliders = await sliderCollection.find({}).toArray();
+    res.json(sliders);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching sliders", error: err });
+  }
+});
+
+// Upload slider
+app.post("/api/sliders", uploadSlider.single("slider"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const imageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+    const newSlider = { imageUrl, filename: req.file.filename };
+
+    const result = await sliderCollection.insertOne(newSlider);
+
+    res.json({ success: true, insertedId: result.insertedId, imageUrl });
+  } catch (err) {
+    res.status(500).json({ message: "Error uploading slider", error: err });
+  }
+});
+
+// Delete slider
+app.delete("/api/sliders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const slider = await sliderCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!slider) {
+      return res.status(404).json({ message: "Slider not found" });
+    }
+
+    // Delete local file
+    if (slider.filename) {
+      const filePath = path.join(__dirname, "uploads", slider.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    // Delete from DB
+    await sliderCollection.deleteOne({ _id: new ObjectId(id) });
+
+    res.json({ success: true, message: "Slider deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Error deleting slider", error: err });
+  }
+});
+
+// ========= Fav icon and Title Routes ===============
+
+app.get("/api/settings", async (req, res) => {
+  try {
+    const settings = await settingsCollection.findOne({});
+    res.json(settings || {});
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch settings" });
+  }
+});
+
+
+app.post("/api/settings", upload.single("favicon"), async (req, res) => {
+  try {
+    const { title } = req.body;
+    let faviconUrl = null;
+
+    if (req.file) {
+      faviconUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+    }
+
+    const existing = await settingsCollection.findOne({});
+    if (existing) {
+      await settingsCollection.updateOne(
+        { _id: existing._id },
+        { $set: { title, ...(faviconUrl && { faviconUrl }) } }
+      );
+    } else {
+      await settingsCollection.insertOne({ title, faviconUrl });
+    }
+
+    res.json({ message: "Settings updated successfully", title, faviconUrl });
+  } catch (err) {
+    console.error("❌ Settings error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+app.delete("/api/settings/favicon/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const settings = await settingsCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!settings) return res.status(404).json({ message: "Settings not found" });
+
+    await settingsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $unset: { faviconUrl: "" } }
+    );
+
+    res.json({ message: "Favicon deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Error deleting favicon" });
+  }
+});
+
 
 
 // ================= START SERVER =================
