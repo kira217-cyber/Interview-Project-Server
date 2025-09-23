@@ -29,6 +29,9 @@ let adminsCollection;
 let logoCollection;
 let sliderCollection;
 let settingsCollection;
+let signupImageCollection;
+let loginImageCollection;
+let adminLoginImageCollection
 
 async function run() {
   try {
@@ -40,6 +43,9 @@ async function run() {
     logoCollection = db.collection("logo");
     sliderCollection = db.collection("sliders");
     settingsCollection = db.collection("settings");
+    signupImageCollection = db.collection("signupImage");
+    loginImageCollection = db.collection("loginImage");
+    adminLoginImageCollection = db.collection("admin-login-image")
 
     console.log("✅ MongoDB Connected Successfully!");
   } catch (error) {
@@ -462,6 +468,182 @@ app.delete("/api/settings/favicon/:id", async (req, res) => {
     res.status(500).json({ error: "Error deleting favicon" });
   }
 });
+
+// Upload Signup Image
+app.post("/api/signup-image", upload.single("signupImage"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const imageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+    const existing = await signupImageCollection.findOne({});
+
+    if (existing) {
+      await signupImageCollection.updateOne(
+        { _id: existing._id },
+        { $set: { imageUrl, filename: req.file.filename } }
+      );
+    } else {
+      await signupImageCollection.insertOne({
+        imageUrl,
+        filename: req.file.filename,
+      });
+    }
+
+    res.json({ imageUrl });
+  } catch (err) {
+    console.error("❌ Upload error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get Signup Image
+app.get("/api/signup-image", async (req, res) => {
+  const signupImage = await signupImageCollection.findOne({});
+  res.json(signupImage || {});
+});
+
+// Delete Signup Image
+app.delete("/api/signup-image/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const image = await signupImageCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!image) {
+      return res.status(404).json({ message: "Signup image not found" });
+    }
+
+    if (image.filename) {
+      const filePath = path.join(__dirname, "uploads", image.filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
+    await signupImageCollection.deleteOne({ _id: new ObjectId(id) });
+
+    res.json({ message: "Signup image deleted successfully" });
+  } catch (err) {
+    console.error("❌ Delete error:", err);
+    res.status(500).json({ message: "Error deleting signup image" });
+  }
+});
+
+// ================= LOGIN IMAGE =================
+
+
+// Get login image
+app.get("/api/login-image", async (req, res) => {
+  const loginImage = await loginImageCollection.findOne({});
+  res.json(loginImage || {});
+});
+
+
+
+// Upload Login Image
+
+app.post("/api/login-image", upload.single("loginImage"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const imageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+    const existing = await loginImageCollection.findOne({});
+
+    if (existing) {
+      await loginImageCollection.updateOne(
+        { _id: existing._id },
+        { $set: { imageUrl, filename: req.file.filename } }
+      );
+    } else {
+      await loginImageCollection.insertOne({
+        imageUrl,
+        filename: req.file.filename,
+      });
+    }
+
+    res.json({ imageUrl });
+  } catch (err) {
+    console.error("❌ Upload error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete login image
+app.delete("/api/login-image/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const image = await loginImageCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!image) {
+      return res.status(404).json({ message: "Signup image not found" });
+    }
+
+    if (image.filename) {
+      const filePath = path.join(__dirname, "uploads", image.filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
+    await loginImageCollection.deleteOne({ _id: new ObjectId(id) });
+
+    res.json({ message: "Signup image deleted successfully" });
+  } catch (err) {
+    console.error("❌ Delete error:", err);
+    res.status(500).json({ message: "Error deleting signup image" });
+  }
+});
+
+
+// Get Login Image
+app.get("/api/admin-login-image", async (req, res) => {
+  try {
+    const image = await adminLoginImageCollection.findOne({});
+    res.json(image || {});
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching login image", error });
+  }
+});
+
+// Upload Login Image
+app.post("/api/admin-login-image", upload.single("loginImage"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+    const loginImageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+
+    const existing = await adminLoginImageCollection.findOne({});
+    if (existing) {
+      await adminLoginImageCollection.updateOne(
+        { _id: existing._id },
+        { $set: { loginImageUrl } }
+      );
+    } else {
+      await adminLoginImageCollection.insertOne({ loginImageUrl });
+    }
+
+    res.json({ loginImageUrl });
+  } catch (error) {
+    res.status(500).json({ message: "Error uploading login image", error });
+  }
+});
+
+// Delete Login Image
+app.delete("/api/admin-login-image/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const image = await adminLoginImageCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!image) {
+      return res.status(404).json({ message: "Login image not found" });
+    }
+
+    await adminLoginImageCollection.deleteOne({ _id: new ObjectId(id) });
+    res.json({ message: "Login image deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting login image", error });
+  }
+});
+
 
 
 
