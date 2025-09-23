@@ -14,8 +14,6 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-
-
 // MongoDB connection
 const client = new MongoClient(process.env.MONGODB_URI, {
   serverApi: {
@@ -31,8 +29,8 @@ let sliderCollection;
 let settingsCollection;
 let signupImageCollection;
 let loginImageCollection;
-let adminLoginImageCollection
-
+let adminLoginImageCollection;
+let navbarSettingsCollection;
 async function run() {
   try {
     await client.connect();
@@ -45,7 +43,8 @@ async function run() {
     settingsCollection = db.collection("settings");
     signupImageCollection = db.collection("signupImage");
     loginImageCollection = db.collection("loginImage");
-    adminLoginImageCollection = db.collection("admin-login-image")
+    adminLoginImageCollection = db.collection("admin-login-image");
+    navbarSettingsCollection = db.collection("navbar_settings");
 
     console.log("✅ MongoDB Connected Successfully!");
   } catch (error) {
@@ -68,18 +67,16 @@ const upload = multer({ storage });
 // ==== Serve static files ====
 app.use("/uploads", express.static("uploads"));
 
-
 // ==== Multer Config for Sliders ====
 const sliderStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/"); 
+    cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
   },
 });
 const uploadSlider = multer({ storage: sliderStorage });
-
 
 // ================= ROUTES =================
 
@@ -319,7 +316,7 @@ app.post("/api/logo", upload.single("logo"), async (req, res) => {
 
     res.json({ logoUrl });
   } catch (err) {
-    console.error("❌ Upload error:", err);   // 👈 এখানে আসল error দেখাবে
+    console.error("❌ Upload error:", err); // 👈 এখানে আসল error দেখাবে
     res.status(500).json({ error: err.message });
   }
 });
@@ -353,7 +350,6 @@ app.delete("/api/logo/:id", async (req, res) => {
     res.status(500).json({ message: "Error deleting logo" });
   }
 });
-
 
 // ================= SLIDER ROUTES =================
 
@@ -423,7 +419,6 @@ app.get("/api/settings", async (req, res) => {
   }
 });
 
-
 app.post("/api/settings", upload.single("favicon"), async (req, res) => {
   try {
     const { title } = req.body;
@@ -450,13 +445,15 @@ app.post("/api/settings", upload.single("favicon"), async (req, res) => {
   }
 });
 
-
 app.delete("/api/settings/favicon/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const settings = await settingsCollection.findOne({ _id: new ObjectId(id) });
+    const settings = await settingsCollection.findOne({
+      _id: new ObjectId(id),
+    });
 
-    if (!settings) return res.status(404).json({ message: "Settings not found" });
+    if (!settings)
+      return res.status(404).json({ message: "Settings not found" });
 
     await settingsCollection.updateOne(
       { _id: new ObjectId(id) },
@@ -470,33 +467,37 @@ app.delete("/api/settings/favicon/:id", async (req, res) => {
 });
 
 // Upload Signup Image
-app.post("/api/signup-image", upload.single("signupImage"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
+app.post(
+  "/api/signup-image",
+  upload.single("signupImage"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const imageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+      const existing = await signupImageCollection.findOne({});
+
+      if (existing) {
+        await signupImageCollection.updateOne(
+          { _id: existing._id },
+          { $set: { imageUrl, filename: req.file.filename } }
+        );
+      } else {
+        await signupImageCollection.insertOne({
+          imageUrl,
+          filename: req.file.filename,
+        });
+      }
+
+      res.json({ imageUrl });
+    } catch (err) {
+      console.error("❌ Upload error:", err);
+      res.status(500).json({ error: err.message });
     }
-
-    const imageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
-    const existing = await signupImageCollection.findOne({});
-
-    if (existing) {
-      await signupImageCollection.updateOne(
-        { _id: existing._id },
-        { $set: { imageUrl, filename: req.file.filename } }
-      );
-    } else {
-      await signupImageCollection.insertOne({
-        imageUrl,
-        filename: req.file.filename,
-      });
-    }
-
-    res.json({ imageUrl });
-  } catch (err) {
-    console.error("❌ Upload error:", err);
-    res.status(500).json({ error: err.message });
   }
-});
+);
 
 // Get Signup Image
 app.get("/api/signup-image", async (req, res) => {
@@ -508,7 +509,9 @@ app.get("/api/signup-image", async (req, res) => {
 app.delete("/api/signup-image/:id", async (req, res) => {
   try {
     const id = req.params.id;
-    const image = await signupImageCollection.findOne({ _id: new ObjectId(id) });
+    const image = await signupImageCollection.findOne({
+      _id: new ObjectId(id),
+    });
 
     if (!image) {
       return res.status(404).json({ message: "Signup image not found" });
@@ -530,14 +533,11 @@ app.delete("/api/signup-image/:id", async (req, res) => {
 
 // ================= LOGIN IMAGE =================
 
-
 // Get login image
 app.get("/api/login-image", async (req, res) => {
   const loginImage = await loginImageCollection.findOne({});
   res.json(loginImage || {});
 });
-
-
 
 // Upload Login Image
 
@@ -593,7 +593,6 @@ app.delete("/api/login-image/:id", async (req, res) => {
   }
 });
 
-
 // Get Login Image
 app.get("/api/admin-login-image", async (req, res) => {
   try {
@@ -605,33 +604,39 @@ app.get("/api/admin-login-image", async (req, res) => {
 });
 
 // Upload Login Image
-app.post("/api/admin-login-image", upload.single("loginImage"), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+app.post(
+  "/api/admin-login-image",
+  upload.single("loginImage"),
+  async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    const loginImageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+      const loginImageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
 
-    const existing = await adminLoginImageCollection.findOne({});
-    if (existing) {
-      await adminLoginImageCollection.updateOne(
-        { _id: existing._id },
-        { $set: { loginImageUrl } }
-      );
-    } else {
-      await adminLoginImageCollection.insertOne({ loginImageUrl });
+      const existing = await adminLoginImageCollection.findOne({});
+      if (existing) {
+        await adminLoginImageCollection.updateOne(
+          { _id: existing._id },
+          { $set: { loginImageUrl } }
+        );
+      } else {
+        await adminLoginImageCollection.insertOne({ loginImageUrl });
+      }
+
+      res.json({ loginImageUrl });
+    } catch (error) {
+      res.status(500).json({ message: "Error uploading login image", error });
     }
-
-    res.json({ loginImageUrl });
-  } catch (error) {
-    res.status(500).json({ message: "Error uploading login image", error });
   }
-});
+);
 
 // Delete Login Image
 app.delete("/api/admin-login-image/:id", async (req, res) => {
   try {
     const id = req.params.id;
-    const image = await adminLoginImageCollection.findOne({ _id: new ObjectId(id) });
+    const image = await adminLoginImageCollection.findOne({
+      _id: new ObjectId(id),
+    });
 
     if (!image) {
       return res.status(404).json({ message: "Login image not found" });
@@ -644,8 +649,46 @@ app.delete("/api/admin-login-image/:id", async (req, res) => {
   }
 });
 
+// GET Navbar Settings
+app.get("/api/navbar", async (req, res) => {
+  try {
+    const settings = await navbarSettingsCollection.findOne({});
+    if (!settings)
+      return res.status(404).json({ message: "Navbar settings not found" });
+    res.json(settings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
 
+// CREATE or UPDATE Navbar Settings
+app.post("/api/navbar", async (req, res) => {
+  try {
+    const { bgColor, textColor, fontSize } = req.body;
+    const existing = await navbarSettingsCollection.findOne({});
 
+    if (existing) {
+      // Update existing
+      await navbarSettingsCollection.updateOne(
+        { _id: existing._id },
+        { $set: { bgColor, textColor, fontSize } }
+      );
+      res.json({ ...existing, bgColor, textColor, fontSize });
+    } else {
+      // Insert new
+      const result = await navbarSettingsCollection.insertOne({
+        bgColor,
+        textColor,
+        fontSize,
+      });
+      res.json({ _id: result.insertedId, bgColor, textColor, fontSize });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
 
 // ================= START SERVER =================
 app.listen(port, () => {
