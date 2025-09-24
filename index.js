@@ -31,6 +31,7 @@ let signupImageCollection;
 let loginImageCollection;
 let adminLoginImageCollection;
 let navbarSettingsCollection;
+let webMenuSettingsCollection;
 async function run() {
   try {
     await client.connect();
@@ -45,6 +46,7 @@ async function run() {
     loginImageCollection = db.collection("loginImage");
     adminLoginImageCollection = db.collection("admin-login-image");
     navbarSettingsCollection = db.collection("navbar_settings");
+    webMenuSettingsCollection = db.collection("web_menu_settings")
 
     console.log("✅ MongoDB Connected Successfully!");
   } catch (error) {
@@ -665,30 +667,109 @@ app.get("/api/navbar", async (req, res) => {
 // CREATE or UPDATE Navbar Settings
 app.post("/api/navbar", async (req, res) => {
   try {
-    const { bgColor, textColor, fontSize } = req.body;
+    const { bgColor, textColor, fontSize, bgButtonColor, signUpButtonBgColor } =
+      req.body;
     const existing = await navbarSettingsCollection.findOne({});
 
     if (existing) {
       // Update existing
       await navbarSettingsCollection.updateOne(
         { _id: existing._id },
-        { $set: { bgColor, textColor, fontSize } }
+        {
+          $set: {
+            bgColor,
+            textColor,
+            fontSize,
+            bgButtonColor,
+            signUpButtonBgColor,
+          },
+        }
       );
-      res.json({ ...existing, bgColor, textColor, fontSize });
+      res.json({
+        ...existing,
+        bgColor,
+        textColor,
+        fontSize,
+        bgButtonColor,
+        signUpButtonBgColor,
+      });
     } else {
       // Insert new
       const result = await navbarSettingsCollection.insertOne({
         bgColor,
         textColor,
         fontSize,
+        bgButtonColor,
+        signUpButtonBgColor,
       });
-      res.json({ _id: result.insertedId, bgColor, textColor, fontSize });
+      res.json({
+        _id: result.insertedId,
+        bgColor,
+        textColor,
+        fontSize,
+        bgButtonColor,
+        signUpButtonBgColor,
+      });
     }
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
+
+// GET Web Menu Settings
+app.get("/api/webmenu", async (req, res) => {
+  try {
+    const menuSettings = await webMenuSettingsCollection.findOne({});
+    if (!menuSettings)
+      return res.status(404).json({ message: "Web menu settings not found" });
+
+    res.json(menuSettings);
+  } catch (error) {
+    console.error("Error fetching web menu settings:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+// CREATE or UPDATE Web Menu Settings
+app.post("/api/webmenu", async (req, res) => {
+  try {
+    const { webMenuBgColor, webMenuTextColor, webMenuFontSize, webMenuHoverColor } = req.body;
+    const existing = await webMenuSettingsCollection.findOne({});
+
+    if (existing) {
+      // Update
+      await webMenuSettingsCollection.updateOne(
+        { _id: existing._id },
+        { $set: { webMenuBgColor, webMenuTextColor, webMenuFontSize, webMenuHoverColor } }
+      );
+      res.json({ ...existing, webMenuBgColor, webMenuTextColor, webMenuFontSize, webMenuHoverColor });
+    } else {
+      // Insert new
+      const result = await webMenuSettingsCollection.insertOne({
+        webMenuBgColor,
+        webMenuTextColor,
+        webMenuFontSize,
+        webMenuHoverColor,
+      });
+      res.json({
+        _id: result.insertedId,
+        webMenuBgColor,
+        webMenuTextColor,
+        webMenuFontSize,
+        webMenuHoverColor,
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
+
+
 
 // ================= START SERVER =================
 app.listen(port, () => {
