@@ -32,6 +32,9 @@ let loginImageCollection;
 let adminLoginImageCollection;
 let navbarSettingsCollection;
 let webMenuSettingsCollection;
+let mobileMenuSettingsCollection;
+let mobileSidebarStyleCollection
+let footerSettingsCollection;
 async function run() {
   try {
     await client.connect();
@@ -46,7 +49,10 @@ async function run() {
     loginImageCollection = db.collection("loginImage");
     adminLoginImageCollection = db.collection("admin-login-image");
     navbarSettingsCollection = db.collection("navbar_settings");
-    webMenuSettingsCollection = db.collection("web_menu_settings")
+    webMenuSettingsCollection = db.collection("web_menu_settings");
+    mobileMenuSettingsCollection =db.collection("mobile_menu_settings");
+    mobileSidebarStyleCollection = db.collection("mobile_sidebar_settings");
+    footerSettingsCollection = db.collection("footer_settings");
 
     console.log("✅ MongoDB Connected Successfully!");
   } catch (error) {
@@ -767,6 +773,214 @@ app.post("/api/webmenu", async (req, res) => {
   }
 });
 
+// =======================
+// MOBILE MENU API ROUTES
+// =======================
+
+// GET Mobile Menu Settings
+app.get("/api/mobilemenu", async (req, res) => {
+  try {
+    const menuSettings = await mobileMenuSettingsCollection.findOne({});
+    if (!menuSettings)
+      return res.status(404).json({ message: "Mobile menu settings not found" });
+
+    res.json(menuSettings);
+  } catch (error) {
+    console.error("Error fetching mobile menu settings:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+// CREATE or UPDATE Mobile Menu Settings
+app.post("/api/mobilemenu", async (req, res) => {
+  try {
+    const {
+      loginBtnColor,
+      signupBtnColor,
+      btnFontSize,
+      pageBgColor,
+      pageFontSize,
+      buttonFontColor,
+      loginPageBgColor,
+    } = req.body;
+
+    const existing = await mobileMenuSettingsCollection.findOne({});
+
+    if (existing) {
+      // Update
+      await mobileMenuSettingsCollection.updateOne(
+        { _id: existing._id },
+        {
+          $set: {
+            loginBtnColor,
+            signupBtnColor,
+            btnFontSize,
+            pageBgColor,
+            pageFontSize,
+            buttonFontColor,
+            loginPageBgColor
+          },
+        }
+      );
+      res.json({
+        ...existing,
+        loginBtnColor,
+        signupBtnColor,
+        btnFontSize,
+        pageBgColor,
+        pageFontSize,
+        buttonFontColor,
+        loginPageBgColor
+      });
+    } else {
+      // Insert new
+      const result = await mobileMenuSettingsCollection.insertOne({
+        loginBtnColor,
+        signupBtnColor,
+        btnFontSize,
+        pageBgColor,
+        pageFontSize,
+        buttonFontColor,
+        loginPageBgColor
+      });
+      res.json({
+        _id: result.insertedId,
+        loginBtnColor,
+        signupBtnColor,
+        btnFontSize,
+        pageBgColor,
+        pageFontSize,
+        buttonFontColor,
+        loginPageBgColor
+      });
+    }
+  } catch (error) {
+    console.error("Error saving mobile menu settings:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
+// GET Mobile Sidebar Style
+app.get("/api/mobile-sidebar-style", async (req, res) => {
+  try {
+    const style = await mobileSidebarStyleCollection.findOne({});
+    if (!style) {
+      return res.status(404).json({ message: "Mobile sidebar style not found" });
+    }
+    res.json(style);
+  } catch (error) {
+    console.error("Error fetching sidebar style:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+// CREATE or UPDATE Mobile Sidebar Style
+app.post("/api/mobile-sidebar-style", async (req, res) => {
+  try {
+    const { gradientDirection, gradientFrom, gradientTo, sideTextColor, fontSize } =
+      req.body;
+
+    const existing = await mobileSidebarStyleCollection.findOne({});
+
+    if (existing) {
+      // Update
+      await mobileSidebarStyleCollection.updateOne(
+        { _id: existing._id },
+        {
+          $set: {
+            gradientDirection,
+            gradientFrom,
+            gradientTo,
+            sideTextColor,
+            fontSize,
+          },
+        }
+      );
+
+      res.json({
+        _id: existing._id,
+        gradientDirection,
+        gradientFrom,
+        gradientTo,
+        sideTextColor,
+        fontSize,
+      });
+    } else {
+      // Insert new
+      const result = await mobileSidebarStyleCollection.insertOne({
+        gradientDirection,
+        gradientFrom,
+        gradientTo,
+        sideTextColor,
+        fontSize,
+      });
+
+      res.json({
+        _id: result.insertedId,
+        gradientDirection,
+        gradientFrom,
+        gradientTo,
+        sideTextColor,
+        fontSize,
+      });
+    }
+  } catch (error) {
+    console.error("Error saving mobile sidebar style:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
+// GET Footer Settings
+app.get("/api/footer", async (req, res) => {
+  try {
+    const footerSettings = await footerSettingsCollection.findOne({});
+    if (!footerSettings)
+      return res.status(404).json({ message: "Footer settings not found" });
+
+    res.json(footerSettings);
+  } catch (error) {
+    console.error("Error fetching footer settings:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+// CREATE or UPDATE Footer Settings
+app.post("/api/footer", async (req, res) => {
+  try {
+    const { footerTextColor, footerFontSize } = req.body;
+
+    const existing = await footerSettingsCollection.findOne({});
+
+    if (existing) {
+      // Update
+      await footerSettingsCollection.updateOne(
+        { _id: existing._id },
+        { $set: { footerTextColor, footerFontSize } }
+      );
+      res.json({
+        ...existing,
+        footerTextColor,
+        footerFontSize,
+      });
+    } else {
+      // Insert new
+      const result = await footerSettingsCollection.insertOne({
+        footerTextColor,
+        footerFontSize,
+      });
+      res.json({
+        _id: result.insertedId,
+        footerTextColor,
+        footerFontSize,
+      });
+    }
+  } catch (error) {
+    console.error("Error saving footer settings:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
 
 
 
