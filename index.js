@@ -35,6 +35,7 @@ let webMenuSettingsCollection;
 let mobileMenuSettingsCollection;
 let mobileSidebarStyleCollection
 let footerSettingsCollection;
+let mobileSidebarMenuCollection
 async function run() {
   try {
     await client.connect();
@@ -53,6 +54,7 @@ async function run() {
     mobileMenuSettingsCollection =db.collection("mobile_menu_settings");
     mobileSidebarStyleCollection = db.collection("mobile_sidebar_settings");
     footerSettingsCollection = db.collection("footer_settings");
+    mobileSidebarMenuCollection = db.collection("url_settings")
 
     console.log("✅ MongoDB Connected Successfully!");
   } catch (error) {
@@ -982,6 +984,40 @@ app.post("/api/footer", async (req, res) => {
   }
 });
 
+// GET Sidebar Menu Links
+app.get("/api/sidebar-menu", async (req, res) => {
+  try {
+    const menu = await mobileSidebarMenuCollection.findOne({});
+    if (!menu) return res.status(404).json({ message: "Sidebar menu not found" });
+    res.json(menu);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+// CREATE or UPDATE Sidebar Menu Links
+app.post("/api/sidebar-menu", async (req, res) => {
+  try {
+    const { sidebarMenu } = req.body; // sidebarMenu = [{label, icon, url}, ...]
+
+    const existing = await mobileSidebarMenuCollection.findOne({});
+
+    if (existing) {
+      await mobileSidebarMenuCollection.updateOne(
+        { _id: existing._id },
+        { $set: { sidebarMenu } }
+      );
+      res.json({ ...existing, sidebarMenu });
+    } else {
+      const result = await mobileSidebarMenuCollection.insertOne({ sidebarMenu });
+      res.json({ _id: result.insertedId, sidebarMenu });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
 
 
 
