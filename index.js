@@ -100,6 +100,50 @@ app.get("/admins", async (req, res) => {
   }
 });
 
+
+// GET /api/admins/:id
+app.get('/api/admins/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const admin = await adminsCollection.findOne({ _id: new ObjectId(id) }, { projection: { password: 0 } }); // password বাদ দিয়ে
+    if (!admin) return res.status(404).json({ error: 'Admin not found' });
+    res.json(admin);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+// PUT /api/admins/:id
+app.put('/api/admins/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const updateData = { ...req.body };
+
+    // যদি password খালি থাকে তাহলে বাদ দিন
+    if (!updateData.password) {
+      delete updateData.password;
+    }
+
+    const result = await adminsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(400).json({ error: 'No changes applied' });
+    }
+
+    res.json({ success: true, message: 'Admin updated successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+
 // 2️⃣ Get single admin by email
 app.get("/admins/:email", async (req, res) => {
   try {
@@ -210,63 +254,59 @@ app.post("/api/admins", async (req, res) => {
   }
 });
 
-// Deactivate user (Mother Admin only)
-app.patch("/api/admins/:id/deactivate", async (req, res) => {
-  try {
-    const { role } = req.body;
-    const { id } = req.params;
 
-    if (role !== "Mother Admin") {
-      return res
-        .status(403)
-        .json({ message: "Only Mother Admin can perform this action" });
+// role hierarchy define করে দিচ্ছি
+const roleHierarchy = {
+  "Mother Admin": ["Sub Admin", "Master", "Agent", "Sub Agent", "User"],
+  "Sub Admin": ["Master", "Agent", "Sub Agent", "User"],
+  "Master": ["Agent", "Sub Agent", "User"],
+  "Agent": ["Sub Agent", "User"],
+  "Sub Agent" : ["User"]
+};
+
+// ✅ Update user status (Activate/Deactivate)
+app.patch("/api/admins/:id/status", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, requesterRole, targetRole } = req.body;
+
+    // Action valid কিনা check
+    if (!["Activate", "Deactivate"].includes(action)) {
+      return res.status(400).json({ success: false, message: "Invalid action" });
+    }
+
+    // Permission check
+    if (
+      requesterRole !== "Mother Admin" &&
+      !roleHierarchy[requesterRole]?.includes(targetRole)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You don’t have permission to manage this role",
+      });
     }
 
     const result = await adminsCollection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: { status: "Deactivated" } }
+      { $set: { status: action === "Activate" ? "Activated" : "Deactivated" } }
     );
 
     if (result.modifiedCount === 0) {
       return res
         .status(404)
-        .json({ message: "User not found or already deactivated" });
+        .json({ success: false, message: "User not found or already same status" });
     }
 
-    res.json({ success: true, message: "User deactivated successfully" });
+    res.json({
+      success: true,
+      message: `User ${action.toLowerCase()}d successfully`,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Activate user (Mother Admin only)
-app.patch("/api/admins/:id/activate", async (req, res) => {
-  try {
-    const { role } = req.body;
-    const { id } = req.params;
 
-    if (role !== "Mother Admin") {
-      return res
-        .status(403)
-        .json({ message: "Only Mother Admin can perform this action" });
-    }
-
-    const result = await adminsCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { status: "Activated" } }
-    );
-
-    if (result.modifiedCount === 0) {
-      return res
-        .status(404)
-        .json({ message: "User not found or already deactivated" });
-    }
-
-    res.json({ success: true, message: "User deactivated successfully" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
 // Ban user (Mother Admin only)
 app.patch("/api/admins/:id/ban", async (req, res) => {
   try {
