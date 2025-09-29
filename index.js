@@ -143,7 +143,6 @@ app.put('/api/admins/:id', async (req, res) => {
 });
 
 
-
 // 2️⃣ Get single admin by email
 app.get("/admins/:email", async (req, res) => {
   try {
@@ -1058,6 +1057,68 @@ app.post("/api/sidebar-menu", async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
+// ---------------------- GET Mother Admin Balance ----------------------
+app.get("/api/admin/balance", async (req, res) => {
+  try {
+    const { role, id } = req.query; // frontend থেকে role + id পাঠানো হবে
+
+    if (!role || !id) {
+      return res.status(400).json({ message: "Role and id required" });
+    }
+
+    const admin = await adminsCollection.findOne({ role, _id: new ObjectId(id) });
+
+    if (!admin) {
+      return res.status(404).json({ message: `${role} not found` });
+    }
+
+    res.status(200).json({
+      message: "Balance fetched successfully",
+      balance: admin.balance || 0,
+      admin,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal Server Error", error });
+  }
+});
+
+// ---------------------- PUT Update Mother Admin Balance ----------------------
+
+app.put("/api/mother-admin/balance", async (req, res) => {
+  try {
+    const { amount, role } = req.body; // frontend থেকে role পাঠানো হবে
+    const value = parseFloat(amount);
+
+    if (role !== "Mother Admin") {
+      return res.status(403).json({ message: "Only Mother Admin can add balance" });
+    }
+
+    if (isNaN(value) || value <= 0) {
+      return res.status(400).json({ message: "Invalid amount" });
+    }
+
+    const filter = { role: "Mother Admin" };
+    const updateDoc = { $inc: { balance: value } };
+
+    const result = await adminsCollection.updateOne(filter, updateDoc);
+
+    if (result.matchedCount > 0) {
+      const updatedAdmin = await adminsCollection.findOne(filter);
+      return res.status(200).json({
+        message: "Balance updated successfully",
+        admin: updatedAdmin,
+      });
+    }
+
+    return res.status(404).json({ message: "Mother Admin not found" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal Server Error", error });
+  }
+});
+
 
 
 
