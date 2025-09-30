@@ -116,12 +116,64 @@ app.get('/api/admins/:id', async (req, res) => {
 
 
 // PUT /api/admins/:id
-app.put('/api/admins/:id', async (req, res) => {
+
+
+// role hierarchy
+const roleHierarchy2 = [
+  "Mother Admin",
+  "Sub Admin",
+  "Master",
+  "Agent",
+  "Sub Agent",
+  "User",
+];
+
+// Update Admin Profile with Role Check
+app.put("/api/admins/:id", async (req, res) => {
   try {
-    const id = req.params.id;
+    const id = req.params.id; // যে user modify হবে
+    const editorId = req.headers["x-admin-id"]; // কে modify করছে
     const updateData = { ...req.body };
 
-    // যদি password খালি থাকে তাহলে বাদ দিন
+    if (!editorId) {
+      return res.status(401).json({ error: "Unauthorized: Missing editor ID" });
+    }
+
+    // modifier কে খুঁজে বের করা
+    const editor = await adminsCollection.findOne({ _id: new ObjectId(editorId) });
+    if (!editor) {
+      return res.status(403).json({ error: "Invalid editor" });
+    }
+
+    // target admin কে খুঁজে বের করা
+    const target = await adminsCollection.findOne({ _id: new ObjectId(id) });
+    if (!target) {
+      return res.status(404).json({ error: "Target admin not found" });
+    }
+
+    // role hierarchy (উচ্চ থেকে নিম্ন)
+    const hierarchy = [
+      "Mother Admin",
+      "Sub Admin",
+      "Master",
+      "Agent",
+      "Sub Agent",
+      "User"
+    ];
+
+    const editorRank = hierarchy.indexOf(editor.role);
+    const targetRank = hierarchy.indexOf(target.role);
+
+    // Rule: editor কেবল তার চেয়ে "নিচের rank" modify করতে পারবে
+    if (editorRank === -1 || targetRank === -1) {
+      return res.status(400).json({ error: "Invalid role" });
+    }
+
+    if (editorRank >= targetRank) {
+      return res.status(403).json({ error: "You are not allowed to modify this admin" });
+    }
+
+    // password খালি থাকলে বাদ দিন
     if (!updateData.password) {
       delete updateData.password;
     }
@@ -132,16 +184,15 @@ app.put('/api/admins/:id', async (req, res) => {
     );
 
     if (result.modifiedCount === 0) {
-      return res.status(400).json({ error: 'No changes applied' });
+      return res.status(400).json({ error: "No changes applied" });
     }
 
-    res.json({ success: true, message: 'Admin updated successfully' });
+    res.json({ success: true, message: "Admin updated successfully" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: "Server error" });
   }
 });
-
 
 // 2️⃣ Get single admin by email
 app.get("/admins/:email", async (req, res) => {
@@ -1088,7 +1139,7 @@ app.get("/api/admin/balance", async (req, res) => {
 
 app.put("/api/mother-admin/balance", async (req, res) => {
   try {
-    const { amount, role } = req.body; // frontend থেকে role পাঠানো হবে
+    const { amount, role } = req.body;
     const value = parseFloat(amount);
 
     if (role !== "Mother Admin") {
@@ -1119,6 +1170,33 @@ app.put("/api/mother-admin/balance", async (req, res) => {
   }
 });
 
+
+// Update Admin Profile
+app.put("/api/profile/:id", async (req, res) => {
+    try {
+    const id = req.params.id;
+    const updateData = { ...req.body };
+
+    // যদি password খালি থাকে তাহলে বাদ দিন
+    if (!updateData.password) {
+      delete updateData.password;
+    }
+
+    const result = await adminsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(400).json({ error: 'No changes applied' });
+    }
+
+    res.json({ success: true, message: 'Admin updated successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 
 
