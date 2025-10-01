@@ -35,7 +35,8 @@ let webMenuSettingsCollection;
 let mobileMenuSettingsCollection;
 let mobileSidebarStyleCollection
 let footerSettingsCollection;
-let mobileSidebarMenuCollection
+let mobileSidebarMenuCollection;
+let transactions
 async function run() {
   try {
     await client.connect();
@@ -54,7 +55,8 @@ async function run() {
     mobileMenuSettingsCollection =db.collection("mobile_menu_settings");
     mobileSidebarStyleCollection = db.collection("mobile_sidebar_settings");
     footerSettingsCollection = db.collection("footer_settings");
-    mobileSidebarMenuCollection = db.collection("url_settings")
+    mobileSidebarMenuCollection = db.collection("url_settings");
+    transactions = db.collection("transactions")
 
     console.log("✅ MongoDB Connected Successfully!");
   } catch (error) {
@@ -91,15 +93,38 @@ const uploadSlider = multer({ storage: sliderStorage });
 // ================= ROUTES =================
 
 // 1️⃣ Get all admins
+// server.js or app.js
+
 app.get("/admins", async (req, res) => {
   try {
-    const admins = await adminsCollection.find({}).toArray();
-    res.json(admins);
+    const { search = '', page = 1, limit = 15 } = req.query;
+
+    // Build the query with search across username, fullname, and email
+    const query = {};
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { fullname: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    // Fetch total count
+    const total = await adminsCollection.countDocuments(query);
+
+    // Fetch paginated admins
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const admins = await adminsCollection
+      .find(query)
+      .skip(startIndex)
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({ admins, total });
   } catch (error) {
     res.status(500).json({ message: "Error fetching admins", error });
   }
 });
-
 
 // GET /api/admins/:id
 app.get('/api/admins/:id', async (req, res) => {
@@ -115,18 +140,10 @@ app.get('/api/admins/:id', async (req, res) => {
 });
 
 
-// PUT /api/admins/:id
+// admin put
 
 
-// role hierarchy
-const roleHierarchy2 = [
-  "Mother Admin",
-  "Sub Admin",
-  "Master",
-  "Agent",
-  "Sub Agent",
-  "User",
-];
+
 
 // Update Admin Profile with Role Check
 app.put("/api/admins/:id", async (req, res) => {
@@ -1195,6 +1212,331 @@ app.put("/api/profile/:id", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+// API endpoint to fetch users with role "User"
+app.get('/api/users', async (req, res) => {
+  try {
+    const { search = '', page = 1, limit = 15 } = req.query;
+
+    // Build the query: filter by role "User" and search across username, fullname, email
+    const query = {
+      role: "User", // Only fetch users with role "User"
+    };
+
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { fullname: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    // Fetch total count
+    const total = await adminsCollection.countDocuments(query);
+
+    // Fetch paginated users
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const filteredUsers = await adminsCollection
+      .find(query)
+      .skip(startIndex)
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({ users: filteredUsers, total });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/api/sub-agents', async (req, res) => {
+  try {
+    const { search = '', page = 1, limit = 15 } = req.query;
+
+    // Build the query: filter by role "User" and search across username, fullname, email
+    const query = {
+      role: "Sub Agent", // Only fetch users with role "User"
+    };
+
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { fullname: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    // Fetch total count
+    const total = await adminsCollection.countDocuments(query);
+
+    // Fetch paginated users
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const filteredUsers = await adminsCollection
+      .find(query)
+      .skip(startIndex)
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({ users: filteredUsers, total });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+app.get('/api/sub-admins', async (req, res) => {
+  try {
+    const { search = '', page = 1, limit = 15 } = req.query;
+
+    // Build the query: filter by role "User" and search across username, fullname, email
+    const query = {
+      role: "Sub Admin", // Only fetch users with role "User"
+    };
+
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { fullname: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    // Fetch total count
+    const total = await adminsCollection.countDocuments(query);
+
+    // Fetch paginated users
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const filteredUsers = await adminsCollection
+      .find(query)
+      .skip(startIndex)
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({ users: filteredUsers, total });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+app.get('/api/agents', async (req, res) => {
+  try {
+    const { search = '', page = 1, limit = 15 } = req.query;
+
+    // Build the query: filter by role "User" and search across username, fullname, email
+    const query = {
+      role: "Agent", // Only fetch users with role "User"
+    };
+
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { fullname: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    // Fetch total count
+    const total = await adminsCollection.countDocuments(query);
+
+    // Fetch paginated users
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const filteredUsers = await adminsCollection
+      .find(query)
+      .skip(startIndex)
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({ users: filteredUsers, total });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+app.get('/api/masters', async (req, res) => {
+  try {
+    const { search = '', page = 1, limit = 15 } = req.query;
+
+    // Build the query: filter by role "User" and search across username, fullname, email
+    const query = {
+      role: "Master", // Only fetch users with role "User"
+    };
+
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { fullname: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    // Fetch total count
+    const total = await adminsCollection.countDocuments(query);
+
+    // Fetch paginated users
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const filteredUsers = await adminsCollection
+      .find(query)
+      .skip(startIndex)
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({ users: filteredUsers, total });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+app.get('/api/mother-admins', async (req, res) => {
+  try {
+    const { search = '', page = 1, limit = 15 } = req.query;
+
+    // Build the query: filter by role "User" and search across username, fullname, email
+    const query = {
+      role: "Mother Admin", // Only fetch users with role "User"
+    };
+
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { fullname: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    // Fetch total count
+    const total = await adminsCollection.countDocuments(query);
+
+    // Fetch paginated users
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const filteredUsers = await adminsCollection
+      .find(query)
+      .skip(startIndex)
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({ users: filteredUsers, total });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+// ========== BACKEND CODE ==========
+
+// Get All Users (role: "User" only)
+app.get("/all-users", async (req, res) => {
+  try {
+    const search = req.query.search || "";
+    const page = parseInt(req.query.page || "1", 10);
+    const limit = parseInt(req.query.limit || "15", 10);
+    const skip = (page - 1) * limit;
+
+    const filter = {
+      ...(search
+        ? {
+            $or: [
+              { username: { $regex: search, $options: "i" } },
+              { fullname: { $regex: search, $options: "i" } },
+              { email: { $regex: search, $options: "i" } },
+            ],
+          }
+        : {}),
+    };
+
+    const total = await adminsCollection.countDocuments(filter);
+    const users = await adminsCollection.find(filter).skip(skip).limit(limit).toArray();
+
+    res.json({ users, total });
+  } catch (err) {
+    console.error("Error fetching users", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+// Transaction API
+app.post("/transaction", async (req, res) => {
+  try {
+    const { actorId, toUserId, amount, type } = req.body;
+    const amt = Number(amount);
+
+    if (!actorId || !toUserId || !amt || amt <= 0) {
+      return res.status(400).json({ message: "Invalid request" });
+    }
+
+    const actor = await adminsCollection.findOne({ _id: new ObjectId(actorId) });
+    const targetUser = await adminsCollection.findOne({ _id: new ObjectId(toUserId) });
+
+    if (!actor || !targetUser) return res.status(404).json({ message: "Not found" });
+
+    // ✅ Role Permission Mapping
+    const rolePermissions = {
+      "Mother Admin": ["Sub Admin", "Master", "Agent", "Sub Agent", "User"],
+      "Sub Admin": ["Master", "Agent", "Sub Agent", "User"],
+      "Master": ["Agent", "Sub Agent", "User"],
+      "Agent": ["Sub Agent", "User"],
+      "Sub Agent": ["User"],
+      "User": []
+    };
+
+    // Check if actor can send to target
+    if (!rolePermissions[actor.role].includes(targetUser.role) && actor.role !== "Mother Admin") {
+      return res.status(403).json({ message: `${actor.role} cannot send money to ${targetUser.role}` });
+    }
+
+    // ✅ Only Mother Admin can "minus"
+    if (type === "minus" && actor.role !== "Mother Admin") {
+      return res.status(403).json({ message: "Only Mother Admin can minus money" });
+    }
+
+    // ✅ Add Money
+    if (type === "add") {
+      if (actor.balance < amt) {
+        return res.status(400).json({ message: "Not enough balance" });
+      }
+
+      await adminsCollection.updateOne({ _id: actor._id }, { $inc: { balance: -amt } });
+      await adminsCollection.updateOne({ _id: targetUser._id }, { $inc: { balance: amt } });
+    }
+
+    // ✅ Minus Money (only by Mother Admin)
+    if (type === "minus" && actor.role === "Mother Admin") {
+      if (targetUser.balance < amt) {
+        return res.status(400).json({ message: "User has insufficient balance" });
+      }
+
+      await adminsCollection.updateOne({ _id: targetUser._id }, { $inc: { balance: -amt } });
+      await adminsCollection.updateOne({ _id: actor._id }, { $inc: { balance: amt } });
+    }
+
+    // ✅ Save Transaction History
+    await transactions.insertOne({
+      from: { id: actor._id, username: actor.username, role: actor.role },
+      to: { id: targetUser._id, username: targetUser.username, role: targetUser.role },
+      amount: amt,
+      type,
+      createdAt: new Date(),
+    });
+
+    res.json({ message: "Transaction success" });
+  } catch (err) {
+    console.error("Transaction error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+// Get Transaction History
+app.get("/transactions", async (req, res) => {
+  try {
+    const history = await transactions.find({}).sort({ createdAt: -1 }).limit(50).toArray();
+    res.json(history);
+  } catch (err) {
+    console.error("History fetch error", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
