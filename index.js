@@ -1541,6 +1541,210 @@ app.get("/transactions", async (req, res) => {
 });
 
 
+// ✅ Get Total Balance for all role === "User"
+app.get("/api/users/total-balance", async (req, res) => {
+  try {
+    // MongoDB aggregate দিয়ে শুধু role = "User" ফিল্টার করা হচ্ছে
+    const result = await adminsCollection
+      .aggregate([
+        { $match: { role: "User" } }, // শুধু role === "User"
+        {
+          $group: {
+            _id: null,
+            totalBalance: { $sum: "$balance" }, // সব User এর balance যোগ
+          },
+        },
+      ])
+      .toArray();
+
+    const total = result.length > 0 ? result[0].totalBalance : 0;
+    res.json({ totalBalance: total }); // frontend এ পাঠানো হবে
+  } catch (error) {
+    console.error("Error getting total user balance:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ✅ Total Sub Agent Balance
+app.get("/api/subagents/total-balance", async (req, res) => {
+  try {
+    const result = await adminsCollection
+      .aggregate([
+        { $match: { role: "Sub Agent" } }, // শুধু Sub Agent role
+        {
+          $group: {
+            _id: null,
+            totalBalance: { $sum: "$balance" }, // সব Sub Agent এর balance যোগ
+          },
+        },
+      ])
+      .toArray();
+
+    const total = result.length > 0 ? result[0].totalBalance : 0;
+    res.json({ totalBalance: total });
+  } catch (error) {
+    console.error("Error getting total Sub Agent balance:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ✅ Total Agent Balance (only role = "Agent")
+app.get("/api/agents/total-balance", async (req, res) => {
+  try {
+    const result = await adminsCollection
+      .aggregate([
+        { $match: { role: "Agent" } }, // শুধু Agent role ফিল্টার করা হচ্ছে
+        {
+          $group: {
+            _id: null,
+            totalBalance: { $sum: "$balance" }, // সব Agent এর balance যোগ করা হচ্ছে
+          },
+        },
+      ])
+      .toArray();
+
+    const total = result.length > 0 ? result[0].totalBalance : 0;
+    res.json({ totalBalance: total });
+  } catch (error) {
+    console.error("Error getting total Agent balance:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ✅ Total Master Balance (only role = "Master")
+app.get("/api/masters/total-balance", async (req, res) => {
+  try {
+    const result = await adminsCollection
+      .aggregate([
+        { $match: { role: "Master" } }, // শুধু Master role filter
+        {
+          $group: {
+            _id: null,
+            totalBalance: { $sum: "$balance" }, // সব Master এর balance যোগ
+          },
+        },
+      ])
+      .toArray();
+
+    const total = result.length > 0 ? result[0].totalBalance : 0;
+    res.json({ totalBalance: total });
+  } catch (error) {
+    console.error("Error getting total Master balance:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ✅ Total Sub Admin Balance (only role = "Sub Admin")
+app.get("/api/subadmins/total-balance", async (req, res) => {
+  try {
+    const result = await adminsCollection
+      .aggregate([
+        { $match: { role: "Sub Admin" } }, // শুধু Sub Admin role filter করা হচ্ছে
+        {
+          $group: {
+            _id: null,
+            totalBalance: { $sum: "$balance" }, // সব Sub Admin এর balance যোগ
+          },
+        },
+      ])
+      .toArray();
+
+    const total = result.length > 0 ? result[0].totalBalance : 0;
+    res.json({ totalBalance: total });
+  } catch (error) {
+    console.error("Error getting total Sub Admin balance:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Login API
+app.post("/api/login-user", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password)
+      return res.status(400).json({ message: "Please fill all fields" });
+
+    // Case-insensitive search with trim
+    const user = await adminsCollection.findOne({
+      username: { $regex: `^${username.trim()}$`, $options: "i" },
+    });
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Password check
+    if (user.password !== password)
+      return res.status(401).json({ message: "Invalid password" });
+
+    // Update lastLogin
+    await adminsCollection.updateOne(
+      { _id: user._id },
+      { $set: { lastLogin: new Date().toLocaleString() } }
+    );
+
+    // Response without password
+    res.json({
+      message: "Login successful",
+      user: {
+        _id: user._id,
+        fullname: user.fullname,
+        username: user.username,
+        role: user.role,
+        balance: user.balance,
+        status: user.status,
+        loginStatus: "self-login",
+        joinedAt: user.joinedAt,
+        lastLogin: new Date().toLocaleString(),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+
+// ✅ User Signup API
+app.post("/api/signup", async (req, res) => {
+  try {
+    const { fullname, email, username, password } = req.body;
+
+    // ফাঁকা থাকলে error
+    if (!fullname || !email || !username || !password) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    // চেক করবো username আগেই আছে কিনা
+    const existingUser = await adminsCollection.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+
+    // নতুন ইউজার তৈরি
+    const newUser = {
+      fullname,
+      email,
+      username,
+      password,
+      role: "User", // ডিফল্ট
+      balance: 0, // নতুন ইউজারের জন্য 0 ব্যালেন্স
+      status: "Activated", // ডিফল্ট স্ট্যাটাস
+      loginStatus: "self-login", // নতুন ইউজার নিজে সাইন আপ করছে
+      joinedAt: new Date().toLocaleString(), // যোগ দেওয়ার সময়
+      lastLogin: new Date().toLocaleString(), // সর্বশেষ লগইন টাইম
+    };
+
+    await adminsCollection.insertOne(newUser);
+
+    res.status(201).json({ message: "Signup successful", user: newUser });
+  } catch (error) {
+    console.error("Signup Error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 
 // ================= START SERVER =================
 app.listen(port, () => {
