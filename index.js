@@ -37,6 +37,7 @@ let mobileSidebarStyleCollection
 let footerSettingsCollection;
 let mobileSidebarMenuCollection;
 let transactions
+let depositSettingsCollection;
 async function run() {
   try {
     await client.connect();
@@ -56,7 +57,8 @@ async function run() {
     mobileSidebarStyleCollection = db.collection("mobile_sidebar_settings");
     footerSettingsCollection = db.collection("footer_settings");
     mobileSidebarMenuCollection = db.collection("url_settings");
-    transactions = db.collection("transactions")
+    transactions = db.collection("transactions");
+    depositSettingsCollection = db.collection("deposit_settings");
 
     console.log("✅ MongoDB Connected Successfully!");
   } catch (error) {
@@ -1703,8 +1705,6 @@ app.post("/api/login-user", async (req, res) => {
   }
 });
 
-
-
 // ✅ User Signup API
 app.post("/api/signup", async (req, res) => {
   try {
@@ -1743,6 +1743,50 @@ app.post("/api/signup", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+// ✅ Get Deposit Settings (for user website)
+app.get("/api/deposit/settings", async (req, res) => {
+  try {
+    const settings = await depositSettingsCollection.findOne({});
+    res.json(settings || {}); // যদি ডেটা না থাকে, খালি অবজেক্ট ফেরত দেবে
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching deposit settings", error });
+  }
+});
+
+// ✅ Upload Payment Method Image
+app.post("/api/upload/payment-image", upload.single("image"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image uploaded!" });
+    }
+
+    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    res.json({ imageUrl }); // frontend-এ এই URL পাঠাবে
+  } catch (error) {
+    console.error("Image upload error:", error);
+    res.status(500).json({ message: "Error uploading image", error });
+  }
+});
+
+
+app.post("/api/deposit/settings", async (req, res) => {
+  try {
+    const data = req.body;
+    console.log("🟡 Received Deposit Settings:", data);
+
+    // Remove _id field
+    const { _id, ...cleanData } = data;
+
+    await depositSettingsCollection.updateOne({}, { $set: cleanData }, { upsert: true });
+
+    res.json({ message: "Deposit settings saved successfully!" });
+  } catch (error) {
+    console.error("❌ Deposit Settings Save Error:", error);
+    res.status(500).json({ message: "Error saving deposit settings", error: error.message });
+  }
+});
+
 
 
 
