@@ -1788,6 +1788,126 @@ app.post("/api/deposit/settings", async (req, res) => {
 });
 
 
+ //3️⃣ Get deposit settings
+app.get("/api/deposit-payment/settings", async (req, res) => {
+  try {
+    const settings = await depositSettingsCollection.findOne();
+    if (!settings) {
+      return res.status(404).json({ error: "Deposit settings not found" });
+    }
+    res.json(settings);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error fetching deposit settings" });
+  }
+});
+
+// 4️⃣ Get all payment methods
+app.get("/api/deposit/methods", async (req, res) => {
+  try {
+    const methods = await depositSettingsCollection.find().toArray();
+    res.json(methods);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error fetching payment methods" });
+  }
+});
+
+// 5️⃣ Get specific payment method by ID
+app.get("/api/deposit/method/:id", async (req, res) => {
+  try {
+    const method = await depositSettingsCollection.findOne({ id: req.params.id });
+    if (!method) {
+      return res.status(404).json({ error: "Payment method not found" });
+    }
+    res.json(method);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error fetching payment method" });
+  }
+});
+
+// 6️⃣ Create new payment method
+app.post("/api/deposit/method", async (req, res) => {
+  try {
+    const methodData = req.body;
+    const existingMethod = await depositSettingsCollection.findOne({ id: methodData.id });
+    if (existingMethod) {
+      return res.status(400).json({ error: "Payment method ID already exists" });
+    }
+    const result = await depositSettingsCollection.insertOne(methodData);
+    res.status(201).json({ message: "Payment method created", id: result.insertedId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error creating payment method" });
+  }
+});
+
+// 7️⃣ Update payment method
+app.put("/api/deposit/method/:id", async (req, res) => {
+  try {
+    const methodData = req.body;
+    const result = await depositSettingsCollection.updateOne(
+      { id: req.params.id },
+      { $set: methodData }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "Payment method not found" });
+    }
+    res.json({ message: "Payment method updated" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error updating payment method" });
+  }
+});
+
+// 8️⃣ Delete payment method
+app.delete("/api/deposit/method/:id", async (req, res) => {
+  try {
+    const result = await depositSettingsCollection.deleteOne({ id: req.params.id });
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Payment method not found" });
+    }
+    res.json({ message: "Payment method deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error deleting payment method" });
+  }
+});
+
+// 9️⃣ Submit deposit transaction
+app.post("/api/deposit/submit", async (req, res) => {
+  try {
+    const transactionData = {
+      transactionId: req.body.transactionId,
+      number: req.body.number,
+      paymentMethod: req.body.paymentMethod,
+      amount: req.body.amount,
+      createdAt: new Date(),
+    };
+    const result = await transactions.insertOne(transactionData);
+    res.json({ message: "Transaction submitted successfully", id: result.insertedId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error submitting transaction" });
+  }
+});
+
+// 10️⃣ Upload deposit logo
+app.post("/api/deposit/upload-logo", upload.single("logo"), async (req, res) => {
+   try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image uploaded!" });
+    }
+
+    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    res.json({ imageUrl }); // frontend-এ এই URL পাঠাবে
+  } catch (error) {
+    console.error("Image upload error:", error);
+    res.status(500).json({ message: "Error uploading image", error });
+  }
+});
+
 
 
 // ================= START SERVER =================
