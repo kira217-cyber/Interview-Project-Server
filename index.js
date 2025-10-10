@@ -36,8 +36,9 @@ let mobileMenuSettingsCollection;
 let mobileSidebarStyleCollection
 let footerSettingsCollection;
 let mobileSidebarMenuCollection;
-let transactions
+let transactions;
 let depositSettingsCollection;
+let depositTransactionsCollection;
 async function run() {
   try {
     await client.connect();
@@ -59,6 +60,7 @@ async function run() {
     mobileSidebarMenuCollection = db.collection("url_settings");
     transactions = db.collection("transactions");
     depositSettingsCollection = db.collection("deposit_settings");
+    depositTransactionsCollection = db.collection("deposit_transactions");
 
     console.log("✅ MongoDB Connected Successfully!");
   } catch (error) {
@@ -1902,8 +1904,179 @@ app.post("/api/deposit/upload-logo", upload.single("logo"), async (req, res) => 
   }
 });
 
+// নতুন রুটস অ্যাড করুন run() ফাংশনের পরে
+
+// Settings API
+app.get('/api/deposit-payment/settings', async (req, res) => {
+  try {
+    const settings = await depositSettingsCollection.findOne(); // Assuming one document
+    if (!settings.promotions) settings.promotions = [];
+    res.json(settings);
+  } catch (err) {
+    res.status(500).json({ error: 'Error fetching settings' });
+  }
+});
+
+// Submit Deposit (NaN চেক অ্যাড করা)
+app.post('/api/deposit/submit', async (req, res) => {
+  try {
+    const { userId, transactionId, number, paymentMethod, paymentType, amount, currency, promotion, pbuAmount, bonusPBU, totalPBU } = req.body;
+
+    // Parse এবং NaN চেক
+    const parsedAmount = parseFloat(amount);
+    const parsedPbuAmount = parseFloat(pbuAmount);
+    const parsedBonusPBU = parseFloat(bonusPBU);
+    const parsedTotalPBU = parseFloat(totalPBU);
+
+    if (isNaN(parsedAmount) || isNaN(parsedPbuAmount) || isNaN(parsedBonusPBU) || isNaN(parsedTotalPBU)) {
+      return res.status(400).json({ error: 'Invalid amount or calculation. Please check values.' });
+    }
+
+    const result = await depositTransactionsCollection.insertOne({
+      userId: new ObjectId(userId),
+      transactionId,
+      number,
+      paymentMethod,
+      paymentType,
+      amount: parsedAmount, // BDT
+      currency,
+      promotion,
+      pbuAmount: parsedPbuAmount,
+      bonusPBU: parsedBonusPBU,
+      totalPBU: parsedTotalPBU,
+      status: 'pending',
+      submittedAt: new Date(),
+      processedAt: null,
+      processedBy: null,
+    });
+    res.status(201).json({ message: 'Deposit submitted', id: result.insertedId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Confirm Deposit (Enhanced debugging and balance validation)
+// Confirm Deposit
+app.post('/api/deposit/confirm/:id', async (req, res) => {
+  try {
+    const txId = req.params.id;
+    const tx = await depositTransactionsCollection.findOne({ _id: new ObjectId(txId) });
+    if (!tx || tx.status !== 'pending') return res.status(400).json({ error: 'Invalid transaction' });
+
+    // Update user balance
+    await adminsCollection.updateOne(
+      { _id: tx.userId },
+      { $inc: { balance: tx.totalPBU } }
+    );
+
+    // Update transaction
+    await depositTransactionsCollection.updateOne(
+      { _id: new ObjectId(txId) },
+      { $set: { status: 'success', processedAt: new Date() } } // processedBy অ্যাড করতে চাইলে অ্যাডমিন আইডি পাস করুন
+    );
+
+    res.json({ message: 'Confirmed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 
+// Get User Transactions
+app.get('/api/deposit/transactions', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    const transactions = await depositTransactionsCollection.find({ userId: new ObjectId(userId) }).toArray();
+    res.json(transactions);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get Pending Transactions (for admin) - with user info
+app.get('/api/deposit/pending', async (req, res) => {
+  try {
+    const pending = await depositTransactionsCollection.aggregate([
+      { $match: { status: 'pending' } },
+      {
+        $lookup: {
+          from: 'admin-collection', // users are in adminsCollection? Wait, your user data is in adminsCollection, but role: "User"
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      { $unwind: '$user' }
+    ]).toArray();
+    res.json(pending);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+
+// Cancel Deposit
+app.post('/api/deposit/cancel/:id', async (req, res) => {
+  try {
+    const txId = req.params.id;
+    const tx = await depositTransactionsCollection.findOne({ _id: new ObjectId(txId) });
+    if (!tx || tx.status !== 'pending') return res.status(400).json({ error: 'Invalid transaction' });
+
+    // No balance update, just status
+    await depositTransactionsCollection.updateOne(
+      { _id: new ObjectId(txId) },
+      { $set: { status: 'failed', processedAt: new Date() } }
+    );
+
+    res.json({ message: 'Cancelled' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get Full Deposit Transaction History (for admin) with search, pagination
+app.get('/api/deposit/history', async (req, res) => {
+  try {
+    const { search = '', page = 1, limit = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build query
+    const query = {};
+    if (search) {
+      query.transactionId = { $regex: search, $options: 'i' }; // Case-insensitive search by transactionId
+    }
+
+    // Get total count
+    const total = await depositTransactionsCollection.countDocuments(query);
+
+    // Aggregate to join user info
+    const transactions = await depositTransactionsCollection.aggregate([
+      { $match: query },
+      {
+        $lookup: {
+          from: 'admin-collection', // Assuming users are in adminsCollection with role: "User"
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      { $unwind: '$user' },
+      { $skip: skip },
+      { $limit: parseInt(limit) }
+    ]).toArray();
+
+    res.json({ transactions, total, page: parseInt(page), limit: parseInt(limit) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 
 
