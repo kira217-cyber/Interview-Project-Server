@@ -1956,7 +1956,7 @@ app.post('/api/deposit/submit', async (req, res) => {
   }
 });
 
-// Confirm Deposit (Enhanced debugging and balance validation)
+
 // Confirm Deposit
 app.post('/api/deposit/confirm/:id', async (req, res) => {
   try {
